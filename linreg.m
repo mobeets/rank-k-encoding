@@ -1,6 +1,5 @@
 function Rh = linreg(S, R, nLags)
 
-    nTimesteps = size(S, 1);
     X = design(S, nLags);
 
     % Recover weights using linear least squares regression

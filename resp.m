@@ -1,23 +1,26 @@
-function R = resp(S, nLags)
+function R = resp(S, nLags, nRank)
 
     nTimesteps = size(S, 1);
     X = design(S, nLags);
 
     % history filter
     x = 1:nLags;
-    k = 5;
-    th = 1;
-    w_true = x(:).^(k-1).*exp(-x(:)/th);
+    w_true = @(k, th) x(:).^(k-1).*exp(-x(:)/th);
 
     % input nonlinearity, noise, constant
-    f = @(x) x.^2;
+    f1 = @(x) x.^3;
+    f2 = @(x) 40*x.^2;
     noisesigma = 5;
     c = 30;
 
-    R = w_true'*f(X) + c + randn(1, size(X, 2))*noisesigma;
-
-    ploti(1, S, w_true, f);
-
+    if nRank == 1
+        R = w_true(5,1)'*f1(X) + c + randn(1, size(X, 2))*noisesigma;
+        ploti(1, S, w_true(5,1), f1);
+    elseif nRank == 2
+        R = w_true(5,1)'*f1(X) + 10*w_true(2,1)'*f2(X) + c + randn(1, size(X, 2))*noisesigma;
+        ploti(2, S, 10*w_true(2,1), f2);
+    end
+    
 end
 %% plot
 function ploti(i, S, w_true, f)
@@ -34,7 +37,7 @@ function ploti(i, S, w_true, f)
     title('input nonlinearity')
 
     subplot(143)
-    plot(w_true)
+    plot(w_true, '-o')
     title('true w weights')
 
     subplot(144)
