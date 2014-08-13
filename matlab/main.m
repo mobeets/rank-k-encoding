@@ -100,10 +100,16 @@ legend('rank-2', 'full rank', 'Location', 'SouthEast');
 % figure(7); hist(R, 30);
 
 %% plot
-% plot(Rh1, 'c');
-% plot(Rh2, 'b');
+figure(12); hold on;
+set(gca,'FontSize', 14);
+plot(R, 'k');
+plot(Rh3, 'b');
+xlabel('time');
+ylabel('spike rate');
+legend('actual', 'rank-2');
+% plot(Rh2, 'g');
 % plot(Rh3, 'r');
 % plot(Rh4, 'b');
 % plot(Rh4b, 'r');
-title('response');
+% title('response');
 
