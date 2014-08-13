@@ -1,4 +1,3 @@
-
 %% stimulus
 nTimesteps = 2000;
 S = 5*randn(nTimesteps, 1);
@@ -7,6 +6,15 @@ S = 5*randn(nTimesteps, 1);
 nLags = 8;
 nRank = 1;
 R = resp(S, nLags, nRank);
+
+%% init
+rmse = @(a, b) sqrt((a-b)*(a-b)'); % for assessing fits
+Rh1 = nan(size(R));
+Rh2 = nan(size(R));
+Rh3 = nan(size(R));
+Rh3b = nan(size(R));
+Rh4 = nan(size(R));
+Rh4b = nan(size(R));
 
 %% fit (linear)
 Rh1 = linreg(S, R, nLags);
@@ -17,31 +25,30 @@ Rh2 = rankreg(S, R, nLags, 1);
 %% fit (rank-2)
 Rh3 = rankreg(S, R, nLags, 2);
 
-%% fit (full rank), minimizing hyperparameter for regularizer
-hyperparam_optimize = false;
-if hyperparam_optimize
-    rmse = @(a, b) sqrt(sum((a-b).^2));
-    error = @(lambda) rmse(R, rankreg(S, R, nLags, Inf, lambda));
-    lmb = fminunc(error, 1);
-    Rh4 = rankreg(S, R, nLags, Inf, lmb);
-else
-    Rh4 = rankreg(S, R, nLags, Inf, lmb);
-end
+%% fit (rank-2), manually minimizing hyperparameter for regularizer
+lambda = optimizeHyperparameter(S, R, nLags, 2, [1e-3 1e-3]);
+Rh3b = rankreg(S, R, nLags, 2, lambda);
 
-%% fit (full rank), choosing hyperparameters via ridge regression or ARD
+%% fit (full rank), using fixed-point ridge regression or ARD
 
 Rh4 = rankreg(S, R, nLags, Inf, 'ridge');
-% disp(['rmse (rank-2) = ' num2str(rmse(R, Rh3))]);
-% disp(['rmse (full rank) = ' num2str(rmse(R, Rh4))]);
+
+%% fit (full rank), manually minimizing hyperparameter for regularizer
+
+lambda = optimizeHyperparameter(S, R, nLags, Inf, [1e-3]);
+Rh4b = rankreg(S, R, nLags, Inf, lambda);
 
 %% write results
-rmse = @(a, b) sqrt(sum((a-b).^2));
+
 disp(['rmse (linear) = ' num2str(rmse(R, Rh1))]);
-disp(['rmse (bilinear) = ' num2str(rmse(R, Rh2))]);
-disp(['rmse (rank-2) = ' num2str(rmse(R, Rh3))]);
-disp(['rmse (full rank) = ' num2str(rmse(R, Rh4))]);
+disp(['rmse (bilinear, no reg) = ' num2str(rmse(R, Rh2))]);
+disp(['rmse (rank-2, no reg) = ' num2str(rmse(R, Rh3))]);
+disp(['rmse (rank-2, manual ridge) = ' num2str(rmse(R, Rh3b))]);
+disp(['rmse (full rank, fixed point) = ' num2str(rmse(R, Rh4))]);
+disp(['rmse (full rank, manual ridge) = ' num2str(rmse(R, Rh4b))]);
 
 %% plot
+
 figure(6); clf; hold on;
 plot(R, 'k');
 % plot(Rh1, 'c');

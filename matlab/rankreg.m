@@ -1,7 +1,33 @@
 function Rh = rankreg(S, R, nLags, nRank, lambda)
+% S is stimulus, [nTimesteps 1]
+% R is response, [1 nTimesteps-nLags+1]
+% nLags is number of terms in stimulus history used to generate response
+% nRank specifies the model fit:
+%   - if nRank == Inf, fits the full-rank model
+%   - if nRank == 1, fits the bilinear (rank-1) model
+%   - if nRank == k (an integer), fits the rank-k model
+% lambda specifies the regularization used when fitting
+%   - if nRank == Inf
+%         - if lambda == 'ridge', uses fixed-point ridge-regression
+%         - if lambda == 'ARD', uses fixed-point ARD
+%         - otherwise, lambda specifies ridge-regression hyperparameter
+%   - if nRank == k
+%         - if lambda is a 2-vector, these are hyperparamaters on w, b
+%               - w, the stimulus history weights, get ridge regression
+%               - b, the basis weights, have smooth prior
+%         - otherwise, no regularization is done
+%
+    if nargin < 5 && isinf(nRank)
+        % use fixed-point to find ridge-regression hyperparam
+        lambda = 'ridge';
+    elseif nargin < 5
+        % no regularization
+        lambda = [nan nan];
+    end
+
     % size(w) == [nLags 1]
     % size(b) == [k 1]
-    % size(M) == [k nLags nTimesteps]        
+    % size(M) == [k nLags nTimesteps]
     X = design(S, nLags);
 
     % make some basis functions
@@ -29,7 +55,7 @@ function Rh = rankreg(S, R, nLags, nRank, lambda)
         fi = 5;
     else
         M = augment(M, nRank);
-        [C, w_h, b_h] = alternating_lsq(M, R, bi, repmat(mu, 1, nRank));
+        [C, w_h, b_h] = alternating_lsq(M, R, lambda, bi, repmat(mu, 1, nRank));
         if nRank == 1
             label = 'bilinear';
         else
@@ -40,13 +66,13 @@ function Rh = rankreg(S, R, nLags, nRank, lambda)
     
     % calculate response
     Rh = response(M, C);
-
-    if ~isinf(nRank)
-        ploti1(fi, label, C, b_h, w_h);
-    else
-        figure(fi); clf;
-        ploti(C);
-    end
+% 
+%     if ~isinf(nRank)
+%         ploti1(fi, label, C, b_h, w_h);
+%     else
+%         figure(fi); clf;
+%         ploti(C);
+%     end
 
 end
 
@@ -194,7 +220,7 @@ end
 
 function [new_theta, new_sigmasq] = ARD_update(theta, sigmasq, n, d, stim_cov, sta, M2, R)
     jj = abs(theta) > 0;
-    disp(num2str(sum(jj)));
+%     disp(num2str(sum(jj)));
     
     [lambda, mu] = posterior_mean_and_cov(stim_cov(jj, jj), sta(jj), d, theta(jj), sigmasq);
     lambda_diag = diag(lambda);
@@ -253,15 +279,17 @@ function Ma = augment(M, k)
 
 end
 %%
-function [C, w_h, b_h] = alternating_lsq(M, R, bi, mu)
+function [C, w_h, b_h] = alternating_lsq(M, R, lambda, bi, mu)
     % recover weights using alternating least squares
+    if numel(lambda) ~= 2 || ~isnumeric(lambda(1))
+        lambda = [nan nan];
+    end
     nBases = size(M, 1);
     b_h = ones(nBases, 1); % initial guess
     niters = 1000;
     for i = 1:niters
-       w_h = fit_w(M, b_h, R);
-%        b_h = fit_b(M, w_h, R);
-       b_h = fit_b_fminunc(M, w_h, R, bi, mu);
+       w_h = fit_w(M, b_h, R, lambda(1));
+       b_h = fit_b_fminunc(M, w_h, R, lambda(2), bi, mu);
     end
     C = w_h*b_h';
 
@@ -289,9 +317,14 @@ function W = mult_w(M, w)
 
 end
 %%
-function w_h = fit_w(M, b, R)
+function w_h = fit_w(M, b, R, lambda)
     B = mult_b(M, b);
-    w_h = (B*B')\(B*R');
+    if ~isnan(lambda)
+        Reg = diag_regularizer(lambda, size(B,1));
+    else
+        Reg = zeros(size(B,1), size(B,1));
+    end
+    w_h = (B*B' + Reg)\(B*R');
 
 end
 %%
@@ -302,8 +335,16 @@ function b_h = fit_b(M, w, R)
 
 end
 %%
-function b_h = fit_b_fminunc(M, w, R, bi, mu, sig, lmb)
-
+function b_h = fit_b_fminunc(M, w, R, lmb, bi, mu, sig)
+    b0 = fit_b(M, w, R);
+    if isnan(lmb)
+        b_h = b0;
+        return;
+    end
+    if nargin < 7
+        sig = 1.0;
+    end
+    
     W = mult_w(M, w);
     loglike_fcn = @(b, sigma) (1/2*sigma^2)*(R - b'*W)*(R - b'*W)';
     
@@ -311,16 +352,11 @@ function b_h = fit_b_fminunc(M, w, R, bi, mu, sig, lmb)
     S = bsxfun(bi, S', mu);
     A = diag(-ones(size(S,1)-1,1), -1) + eye(size(S,1), size(S,1));
     D = A'*A;
-    D = eye(size(D,1), size(D,1));
+    D = eye(size(D,1), size(D,1)); % just for now
     logprior_fcn = @(b, lambda) (lambda/2)*(b(2:end)'*S')*D*(b(2:end)'*S')';
     
-    if nargin < 6
-        sig = 1.0;
-        lmb = 1000.0;
-    end
-    b0 = fit_b(M, w, R);
     obj_fun = @(b) loglike_fcn(b, sig) + logprior_fcn(b, lmb);
-    options = optimoptions(@fminunc,'Algorithm','quasi-newton', 'Display', 'off');
+    options = optimoptions(@fminunc, 'Algorithm', 'quasi-newton', 'Display', 'off');
     b_h = fminunc(obj_fun, b0, options);
 
 end

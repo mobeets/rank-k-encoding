@@ -1,1 +1,2 @@
-rankreg.m~
+*.m~
+.DS_Store
