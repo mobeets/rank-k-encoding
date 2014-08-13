@@ -1,6 +1,6 @@
 
 %% stimulus
-nTimesteps = 500;
+nTimesteps = 2000;
 S = 5*randn(nTimesteps, 1);
 
 %% response
@@ -25,8 +25,14 @@ if hyperparam_optimize
     lmb = fminunc(error, 1);
     Rh4 = rankreg(S, R, nLags, Inf, lmb);
 else
-    Rh4 = rankreg(S, R, nLags, Inf);
+    Rh4 = rankreg(S, R, nLags, Inf, lmb);
 end
+
+%% fit (full rank), choosing hyperparameters via ridge regression or ARD
+
+Rh4 = rankreg(S, R, nLags, Inf, 'ARD');
+disp(['rmse (rank-2) = ' num2str(rmse(R, Rh3))]);
+disp(['rmse (full rank) = ' num2str(rmse(R, Rh4))]);
 
 %% write results
 rmse = @(a, b) sqrt(sum((a-b).^2));

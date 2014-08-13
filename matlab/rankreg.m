@@ -15,30 +15,26 @@ function Rh = rankreg(S, R, nLags, nRank, lambda)
     M = reshape(M(:), size(X, 1), size(X, 2), size(mu, 2));
     M = permute(M, [3 1 2]);
 
-    % augment to fit constant rate
-
+    % augment to fit constant rate; fit
     if nRank == 1
         M = augment(M, 1);
-        if nargin < 5
-            lambda = [0.5 0.5];
-        end
-        [C, w_h, b_h] = alternating_lsq(M, R, lambda);
+        [C, w_h, b_h] = alternating_lsq(M, R, bi, mu);
         label = 'bilinear';
         fi = 3;
     elseif isinf(nRank)
         M = augment(M, 1);
-        [theta, sigmasq] = regularizer_hyperparams(M, R, 'ARD');
-        lambda = theta; % no sigmasq, right?
-        disp(['lambda=' num2str(lambda)]);
-        C = fullrank_lsq(M, R, lambda);
+        if ~isnumeric(lambda)
+            [lambda, ~, mu] = regularizer_hyperparams(M, R, lambda);
+            disp(['lambda=' num2str(lambda)]);
+            C = reshape(mu, [size(M,1) size(M,2)])';
+        else
+            C = fullrank_lsq(M, R, lambda);
+        end
         label = 'full rank';
         fi = 5;
     else
         M = augment(M, nRank);
-        if nargin < 5
-            lambda = 1;
-        end
-        [C, w_h, b_h] = alternating_lsq(M, R, lambda);
+        [C, w_h, b_h] = alternating_lsq(M, R);
         label = ['rank-' num2str(nRank)];
         fi = 4;
     end
@@ -103,6 +99,7 @@ function C = fullrank_lsq(M, R, lambda)
     nBases = size(M, 1);
     nLags = size(M, 2);
     M2 = reshape_M(M);
+
     Reg = diag_regularizer(lambda, size(M2,1));
     C2 = (M2*M2' + Reg)\(M2*R');
     C = reshape(C2, [nBases nLags])';
@@ -115,13 +112,13 @@ function Reg = diag_regularizer(lambda, d)
     Reg = diag(lambda);
 end
 %%
-function [theta, sigmasq] = regularizer_hyperparams(M, R, kind)
+function [theta, sigmasq, mu] = regularizer_hyperparams(M, R, kind)
     % finds regularizer hyperparameter using fixed-point algorithm
     % kind: 'ridge', 'ARD'
     % source: Park, Pillow (2011) Methods
     
     % controls # of iterations
-    tol = 1e-7;
+    tol = 1e-10;
     maxiters = 1000;
     
     % variables reused
@@ -141,7 +138,7 @@ function [theta, sigmasq] = regularizer_hyperparams(M, R, kind)
             thetas(1) = 1e-6;
             sigmasqs(1) = errs*errs' / n;
         case 'ARD'
-            figure; colormap(gray); imagesc(reshape(sta, size(M,1), size(M,2))); title('sta');
+%             figure(13); colormap(gray); imagesc(reshape(sta, size(M,1), size(M,2))); title('sta');
             thetas = nan(maxiters+1, d);           
             [th, sqs] = regularizer_hyperparams(M, R, 'ridge');
             thetas(1, :) = th;
@@ -150,19 +147,37 @@ function [theta, sigmasq] = regularizer_hyperparams(M, R, kind)
     
     % iterate
     for ii=1:maxiters
+        t0 = thetas(ii,:);
+        s0 = sigmasqs(ii,:);
         switch kind
             case 'ridge'
-                [thetas, sigmasqs] =  ridge_update(thetas, sigmasqs, ii, n, d, stim_cov, sta, M2, R);
+                [t1, s1] =  ridge_update(t0, s0, n, d, stim_cov, sta, M2, R);
             case 'ARD'
-                [thetas, sigmasqs] =  ARD_update(thetas, sigmasqs, ii, n, d, stim_cov, sta, M2, R);
+                [t1, s1] =  ARD_update(t0, s0, n, d, stim_cov, sta, M2, R);
         end
+        thetas(ii+1,:) = t1;
+        sigmasqs(ii+1) = s1;
         % check if changes in updates are within tolerance
-        if abs(sigmasqs(ii+1) - sigmasqs(ii)) < tol
+        if abs(s1 - s0) < tol
             break;
         end
     end
-    theta = thetas(ii+1,:);
-    sigmasq = sigmasqs(ii+1);
+    
+    % find mean
+    theta = t1;
+    sigmasq = s1;
+    switch kind
+        case 'ARD'
+%             theyBeGood = abs(theta) > 0;
+            theyBeGood = ones(numel(theta),1);
+            mu = zeros(numel(theta), 1);
+            [~, m] = posterior_mean_and_cov(stim_cov(theyBeGood, theyBeGood), sta(theyBeGood), d, theta(theyBeGood), sigmasq);
+            mu(theyBeGood) = m;
+            figure(16); colormap(gray); imagesc(reshape(mu, 11, 9));
+        case 'ridge'
+            [~, mu] = posterior_mean_and_cov(stim_cov, sta, d, theta, sigmasq);
+            figure(15); colormap(gray); imagesc(reshape(mu, 11, 9));
+    end
 end
 
 function [lambda, mu] = posterior_mean_and_cov(stim_cov, sta, d, theta, sigmasq)
@@ -171,27 +186,25 @@ function [lambda, mu] = posterior_mean_and_cov(stim_cov, sta, d, theta, sigmasq)
     mu = lambda*sta/sigmasq;
 end
 
-function [thetas, sigmasqs] = ridge_update(thetas, sigmasqs, ii, n, d, stim_cov, sta, M2, R)
-    [lambda, mu] = posterior_mean_and_cov(stim_cov, sta, d, thetas(ii), sigmasqs(ii));
-    thetas(ii+1) = (d - thetas(ii)*trace(lambda))/(mu'*mu);
+function [new_theta, new_sigmasq] = ridge_update(theta, sigmasq, n, d, stim_cov, sta, M2, R)
+    [lambda, mu] = posterior_mean_and_cov(stim_cov, sta, d, theta, sigmasq);
+    new_theta = (d - theta*trace(lambda))/(mu'*mu);
 	errs = (R' - M2*mu)';
-	sigmasqs(ii+1) = (errs*errs')/(n - d - thetas(ii)*trace(lambda));
+	new_sigmasq = (errs*errs')/(n - d + theta*trace(lambda));
 end
 
-function [thetas, sigmasqs] = ARD_update(thetas, sigmasqs, ii, n, d, stim_cov, sta, M2, R)
-    if ii == 10000
-        keyboard
-    end
-    [lambda, mu] = posterior_mean_and_cov(stim_cov, sta, d, thetas(ii,:), sigmasqs(ii));
+function [new_theta, new_sigmasq] = ARD_update(theta, sigmasq, n, d, stim_cov, sta, M2, R)
+    jj = abs(theta) > 0;
+    disp(num2str(sum(jj)));
+    
+    [lambda, mu] = posterior_mean_and_cov(stim_cov(jj, jj), sta(jj), d, theta(jj), sigmasq);
     lambda_diag = diag(lambda);
-    thetas(ii+1, :) = (1 - thetas(ii,:)'.*lambda_diag)./mu;
-    thetas(ii+1, isnan(thetas(ii+1,:))) = 1e-8;
-%     colormap(gray); imagesc(lambda); drawnow; pause(0.4);
-%     plot(mu, 'o'); drawnow; pause(0.4);
-%     plot(thetas(ii+1,:), 'o'); drawnow; pause(0.5);
-    plot(lambda_diag, 'o'); drawnow; pause(0.6);
-    errs = (R' - M2*mu)';
-    sigmasqs(ii+1, :) = (errs*errs')/(n - d - thetas(ii,:)*lambda_diag);
+    
+    new_theta = zeros(numel(d), 1);
+    new_theta(jj) = (1 - theta(jj)'.*lambda_diag)./mu;
+    
+    errs = (R' - M2(:,jj)*mu)';
+    new_sigmasq = (errs*errs')/(n - sum(jj) + theta(jj)*lambda_diag);
 end
 %%
 function Reg = ahrens_regularizer(lambda, bi, mu, nLags)
@@ -241,14 +254,15 @@ function Ma = augment(M, k)
 
 end
 %%
-function [C, w_h, b_h] = alternating_lsq(M, R, lambda)
+function [C, w_h, b_h] = alternating_lsq(M, R, bi, mu)
     % recover weights using alternating least squares
     nBases = size(M, 1);
     b_h = ones(nBases, 1); % initial guess
     niters = 1000;
     for i = 1:niters
-       w_h = fit_w(M, b_h, R);%, lambda(1));
-       b_h = fit_b(M, w_h, R);%, lambda(2));
+       w_h = fit_w(M, b_h, R);
+%        b_h = fit_b(M, w_h, R);
+       b_h = fit_b_fminunc(M, w_h, R, bi, mu);
     end
     C = w_h*b_h';
 
@@ -276,19 +290,36 @@ function W = mult_w(M, w)
 
 end
 %%
-function w_h = fit_w(M, b, R, lambda)
-    if nargin < 4
-        lambda = 0.0;
-    end
+function w_h = fit_w(M, b, R)
     B = mult_b(M, b);
-    Reg = diag_regularizer(lambda, size(B,1));
-    w_h = (B*B' + Reg)\(B*R');
+    w_h = (B*B')\(B*R');
 
 end
 %%
-function b_h = fit_b(M, w, R, lambda)
-
+function b_h = fit_b(M, w, R)
+ 
     W = mult_w(M, w);
     b_h = (W*W')\(W*R');
+
+end
+%%
+function b_h = fit_b_fminunc(M, w, R, bi, mu, sig, lmb)
+
+    W = mult_w(M, w);
+    loglike_fcn = @(b, sigma) (1/sigma^2)*(R - b'*W)*(R - b'*W)';
+    
+    S = linspace(min(M(:)), max(M(:)), 100);
+    S = bsxfun(bi, S', mu);
+    A = diag(-ones(size(S,1)-1,1), -1) + eye(size(S,1), size(S,1));
+    D = A'*A;
+    logprior_fcn = @(b, lambda) lambda*(b(2:end)'*S')*D*(b(2:end)'*S')';
+    
+    if nargin < 6
+        sig = 1.0;
+        lmb = 1.0;
+    end
+    b0 = fit_b(M, w, R);
+    obj_fun = @(b) loglike_fcn(b, sig) + logprior_fcn(b, lmb);
+    b_h = fminunc(obj_fun, b0);
 
 end
