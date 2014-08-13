@@ -16,12 +16,7 @@ function Rh = rankreg(S, R, nLags, nRank, lambda)
     M = permute(M, [3 1 2]);
 
     % augment to fit constant rate; fit
-    if nRank == 1
-        M = augment(M, 1);
-        [C, w_h, b_h] = alternating_lsq(M, R, bi, mu);
-        label = 'bilinear';
-        fi = 3;
-    elseif isinf(nRank)
+    if isinf(nRank)
         M = augment(M, 1);
         if ~isnumeric(lambda)
             [lambda, ~, mu] = regularizer_hyperparams(M, R, lambda);
@@ -34,9 +29,13 @@ function Rh = rankreg(S, R, nLags, nRank, lambda)
         fi = 5;
     else
         M = augment(M, nRank);
-        [C, w_h, b_h] = alternating_lsq(M, R);
-        label = ['rank-' num2str(nRank)];
-        fi = 4;
+        [C, w_h, b_h] = alternating_lsq(M, R, bi, repmat(mu, 1, nRank));
+        if nRank == 1
+            label = 'bilinear';
+        else
+            label = ['rank-' num2str(nRank)];
+        end
+        fi = 3 + nRank;
     end
     
     % calculate response
@@ -306,20 +305,22 @@ end
 function b_h = fit_b_fminunc(M, w, R, bi, mu, sig, lmb)
 
     W = mult_w(M, w);
-    loglike_fcn = @(b, sigma) (1/sigma^2)*(R - b'*W)*(R - b'*W)';
+    loglike_fcn = @(b, sigma) (1/2*sigma^2)*(R - b'*W)*(R - b'*W)';
     
     S = linspace(min(M(:)), max(M(:)), 100);
     S = bsxfun(bi, S', mu);
     A = diag(-ones(size(S,1)-1,1), -1) + eye(size(S,1), size(S,1));
     D = A'*A;
-    logprior_fcn = @(b, lambda) lambda*(b(2:end)'*S')*D*(b(2:end)'*S')';
+    D = eye(size(D,1), size(D,1));
+    logprior_fcn = @(b, lambda) (lambda/2)*(b(2:end)'*S')*D*(b(2:end)'*S')';
     
     if nargin < 6
         sig = 1.0;
-        lmb = 1.0;
+        lmb = 1000.0;
     end
     b0 = fit_b(M, w, R);
     obj_fun = @(b) loglike_fcn(b, sig) + logprior_fcn(b, lmb);
-    b_h = fminunc(obj_fun, b0);
+    options = optimoptions(@fminunc,'Algorithm','quasi-newton', 'Display', 'off');
+    b_h = fminunc(obj_fun, b0, options);
 
 end
