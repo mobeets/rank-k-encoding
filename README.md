@@ -69,11 +69,11 @@ This is identical to the method by which we simulated spike rates.
 
 #### full-rank
 
-Finds two matrices MU and MV such that:
+Finds a matrix MU such that:
 
-rh(t) = MU X(t) + MV X(t) + e
+rh(t) = MU X(t) + e
 
-Note how this model has _more_ parameters than our simulated model.
+Note how this model has _more_ parameters than our simulated model, since MU is a nLags x nBases a matrix, whereas the rank-2 weights are of total length 2*(nLags + nBases).
 
 ### Fitting results: Rates
 
