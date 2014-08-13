@@ -1,9 +1,7 @@
-rank-k-encoding
-===============
 
-_Goal_: fitting neural encoding models with input nonlinearities
+__Goal__: fitting neural encoding models with input nonlinearities (i.e. NL cascade models)
 
-_Models fit_: linear, bilinear, rank-2, full-rank
+__Models fit__: linear, bilinear, rank-2, full-rank
 
 ## Example
 
@@ -41,7 +39,7 @@ And here's a plot of the spike rate (response) vs. the stimulus value at that ti
 
 We want to fit the neuron's response, r(t), by finding the set of weights on the stimulus history and input nonlinearity that minimize our squared error. In other words, we want a rh(t) such that (rh(t) - r(t)).^2 is as small as possible.
 
-#### Linear
+#### linear
 
 This finds a set of spike history weights, wU, such that:
 
