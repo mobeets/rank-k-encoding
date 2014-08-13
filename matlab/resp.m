@@ -5,42 +5,51 @@ function R = resp(S, nLags, nRank)
 
     % history filter
     x = 1:nLags;
-    w_true = @(k, th) x(:).^(k-1).*exp(-x(:)/th);
+    w_true = @(k, th) (x(:).^(k-1)).*exp(-x(:)/th);
 
     % input nonlinearity, noise, constant
-    f1 = @(x) x.^3;
-    f2 = @(x) 40*x.^2;
-    noisesigma = 5;
-    c = 30;
+    f1 = @(x) 1e-2*x.^3;
+    f2 = @(x) 1e-1*x.^2;
+    noisesigma = 1;
+    c = 250;
 
     if nRank == 1
         R = w_true(5,1)'*f1(X) + c + randn(1, size(X, 2))*noisesigma;
         ploti(1, S, w_true(5,1), f1);
     elseif nRank == 2
-        R = w_true(5,1)'*f1(X) + 10*w_true(2,1)'*f2(X) + c + randn(1, size(X, 2))*noisesigma;
+        R = w_true(5,1)'*f1(X) + w_true(2,1)'*f2(X) + c + randn(1, size(X, 2))*noisesigma;
+        ploti(1, S, w_true(5,1), f1);
         ploti(2, S, 10*w_true(2,1), f2);
+        figure(3); plot(R, 'k-', 'MarkerSize', 2); xlabel('time'); ylabel('spike rate');
     end
     
 end
 %% plot
 function ploti(i, S, w_true, f)
 
-    figure(i); clf;
+    figure(i); clf; colormap(gray);
+% 
+%     subplot(141)
+%     plot(S, 'k')
+%     title('stimulus')
 
-    subplot(141)
-    plot(S, 'k')
-    title('stimulus')
-
-    subplot(142)
+    subplot(131)
     stim_bounds = linspace(min(S), max(S), 10);
-    plot(stim_bounds, f(stim_bounds), 'k')
-    title('input nonlinearity')
+    plot(stim_bounds, f(stim_bounds), 'ko', 'MarkerFaceColor', 'k');
+    title('b, input nonlinearity');
+    xlabel('stimulus value');
+    ylabel('response');
 
-    subplot(143)
-    plot(w_true, '-o')
-    title('true w weights')
+    subplot(132)
+    plot(0:numel(w_true)-1, w_true, 'ko', 'MarkerFaceColor', 'k');
+    xlim([0-0.5, numel(w_true)-0.5]);
+    title('w, stimulus history weights');
+    xlabel('history');
+    ylabel('response');
 
-    subplot(144)
-    image(w_true*f(stim_bounds))
-    title('C')
+    subplot(133)
+    image(w_true*f(stim_bounds));
+    xlabel('nonlinearity response');
+    ylabel('history response');
+    title('C');
 end

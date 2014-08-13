@@ -163,7 +163,6 @@ function [theta, sigmasq, mu] = regularizer_hyperparams(M, R, kind)
             thetas(1) = 1e-6;
             sigmasqs(1) = errs*errs' / n;
         case 'ARD'
-%             figure(13); colormap(gray); imagesc(reshape(sta, size(M,1), size(M,2))); title('sta');
             thetas = nan(maxiters+1, d);           
             [th, sqs] = regularizer_hyperparams(M, R, 'ridge');
             thetas(1, :) = th;
@@ -173,7 +172,7 @@ function [theta, sigmasq, mu] = regularizer_hyperparams(M, R, kind)
     % iterate
     for ii=1:maxiters
         t0 = thetas(ii,:);
-        s0 = sigmasqs(ii,:);
+        s0 = sigmasqs(ii);
         switch kind
             case 'ridge'
                 [t1, s1] =  ridge_update(t0, s0, n, d, stim_cov, sta, M2, R);
@@ -182,7 +181,7 @@ function [theta, sigmasq, mu] = regularizer_hyperparams(M, R, kind)
         end
         thetas(ii+1,:) = t1;
         sigmasqs(ii+1) = s1;
-        % check if changes in updates are within tolerance
+        % stop if changes in sigmasq update is within tolerance
         if abs(s1 - s0) < tol
             break;
         end
@@ -192,27 +191,31 @@ function [theta, sigmasq, mu] = regularizer_hyperparams(M, R, kind)
     theta = t1;
     sigmasq = s1;
     switch kind
+        case 'ridge'
+            [~, mu] = posterior_mean_and_cov(stim_cov, sta, theta, sigmasq, d);
+            figure(15); colormap(gray); imagesc(reshape(mu, 11, 9));
         case 'ARD'
-%             theyBeGood = abs(theta) > 0;
-            theyBeGood = ones(numel(theta),1);
+            theyBeGood = abs(theta) > 0;
+%             theyBeGood = ones(numel(theta),1) == 1;
             mu = zeros(numel(theta), 1);
-            [~, m] = posterior_mean_and_cov(stim_cov(theyBeGood, theyBeGood), sta(theyBeGood), d, theta(theyBeGood), sigmasq);
+            [~, m] = posterior_mean_and_cov(stim_cov(theyBeGood, theyBeGood), sta(theyBeGood), theta(theyBeGood), sigmasq);
             mu(theyBeGood) = m;
             figure(16); colormap(gray); imagesc(reshape(mu, 11, 9));
-        case 'ridge'
-            [~, mu] = posterior_mean_and_cov(stim_cov, sta, d, theta, sigmasq);
-            figure(15); colormap(gray); imagesc(reshape(mu, 11, 9));
     end
 end
 
-function [lambda, mu] = posterior_mean_and_cov(stim_cov, sta, d, theta, sigmasq)
+function [lambda, mu] = posterior_mean_and_cov(stim_cov, sta, theta, sigmasq, d)
     % update posterior mean and covariance
-    lambda = inv(stim_cov/sigmasq + diag_regularizer(theta, d));
+    if nargin < 5
+        lambda = inv(stim_cov/sigmasq + diag_regularizer(theta));
+    else
+        lambda = inv(stim_cov/sigmasq + diag_regularizer(theta, d));
+    end
     mu = lambda*sta/sigmasq;
 end
 
 function [new_theta, new_sigmasq] = ridge_update(theta, sigmasq, n, d, stim_cov, sta, M2, R)
-    [lambda, mu] = posterior_mean_and_cov(stim_cov, sta, d, theta, sigmasq);
+    [lambda, mu] = posterior_mean_and_cov(stim_cov, sta, theta, sigmasq, d);
     new_theta = (d - theta*trace(lambda))/(mu'*mu);
 	errs = (R' - M2*mu)';
 	new_sigmasq = (errs*errs')/(n - d + theta*trace(lambda));
@@ -222,11 +225,11 @@ function [new_theta, new_sigmasq] = ARD_update(theta, sigmasq, n, d, stim_cov, s
     jj = abs(theta) > 0;
 %     disp(num2str(sum(jj)));
     
-    [lambda, mu] = posterior_mean_and_cov(stim_cov(jj, jj), sta(jj), d, theta(jj), sigmasq);
+    [lambda, mu] = posterior_mean_and_cov(stim_cov(jj, jj), sta(jj), theta(jj), sigmasq);
     lambda_diag = diag(lambda);
     
     new_theta = zeros(numel(d), 1);
-    new_theta(jj) = (1 - theta(jj)'.*lambda_diag)./mu;
+    new_theta(jj) = (1 - theta(jj)'.*lambda_diag)./(mu.^2);
     
     errs = (R' - M2(:,jj)*mu)';
     new_sigmasq = (errs*errs')/(n - sum(jj) + theta(jj)*lambda_diag);
