@@ -1,7 +1,9 @@
 
 __Goal__: fitting neural encoding models with input nonlinearities (i.e. NL cascade models)
 
-__Models fit__: linear, bilinear, rank-2, full-rank
+__Models fit__: linear, bilinear, rank-k, full-rank
+
+__Source__: [Ahrens et al (2008)](http://www.ncbi.nlm.nih.gov/pubmed/18300178)
 
 ## Example
 
