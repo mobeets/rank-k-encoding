@@ -15,18 +15,16 @@ Simulate a 1-d stimulus for 2000 time bins. Stimulus values are i.i.d., and norm
 
 ### Filters
 
-Simulate a neuron with two input nonlinearities, _f1_ and _f2_, and two stimulus history filters, _w1_ and _w2_. We can model the input nonlinearities by projecting them onto a series of Gaussian bumps spanning the range of stimulus values. The nonlinearities are now represented by two sets of basis weights, _b1_ and _b2_.
+Simulate a neuron with two input nonlinearities, _f1_ and _f2_, and two stimulus history filters, _w1_ and _w2_. We can model the input nonlinearities by projecting them onto a collection of basis functions spanning the range of stimulus values. In this case I'm using 10 gaussian bumps as my basis functions. The nonlinearities are then represented by two sets of basis weights, _b1_ and _b2_, scaling the responses of the gaussians to a given stimulus value.
 
 ![Filter A](/images/resp-1.png?raw=true "1st filter")
 ![Filter B](/images/resp-2.png?raw=true "2nd filter")
 
-The spike rate _r(t)_ is calculated as follows, where X(t) is a vector of the last 8 stimulus values, and e is gaussian noise with mean 250, variance 1:
+The spike rate _r(t)_ is calculated as follows, where X(t) is the outer product of a vector of the last 8 stimulus values with the response of the 10 basis functions to those values, and e is gaussian noise with mean 250, variance 1:
 
-r(t) = w1' b1 f1(X(t)) + w2' b2 f2(X(t)) + e
+r(t) = w1' b1 X(t) + w2' b2 X(t) + e
 
-Or, letting C1 = w1' b1, and C2 = w2' b2 (shown in the images above), then:
-
-r(t) = C1 X(t) + C2 X(t) + e
+(The matrices (w1' b1) and (w2' b2) are labeled as 'C' in the images above.)
 
 ### Response
 
@@ -45,9 +43,9 @@ We want to fit the neuron's response, r(t), by finding the set of weights on the
 
 #### Linear
 
-This finds a set of spike history weights, wl, such that:
+This finds a set of spike history weights, wU, such that:
 
-rh(t) = wl' X(t) + e
+rh(t) = wU' X(t) + e
 
 In other words, it assumes there is no input nonlinearity.
 
@@ -55,7 +53,7 @@ In other words, it assumes there is no input nonlinearity.
 
 Finds a set of spike history weights, wU, and a set of basis weights, bU, such that:
 
-rh(t) = wU' bU X(t) + e
+rh(t) = wU' bU*X(t) + e
 
 In other words, it assumes there is only one input nonlinearity.
 
