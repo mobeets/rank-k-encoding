@@ -43,6 +43,16 @@ Rh4b = rankreg(S, R, nLags, Inf, 'ARD');
 % lambda = optimizeHyperparameter(S, R, nLags, Inf, 1e-3);
 % Rh4c = rankreg(S, R, nLags, Inf, lambda);
 
+%% fit (full rank) ASD
+
+% To do:
+% * clean up plotting stuff into plot.m
+% * better cmd args for setting ASD
+% * fix distance matrix outside of this fcn
+% * update mu/cov in each iteration
+
+Rh4b = rankreg(S, R, nLags, Inf, 1);
+
 %% write results
 
 disp(['rmse (linear) = ' num2str(rmse(R, Rh1))]);

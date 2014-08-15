@@ -45,11 +45,12 @@ function Rh = rankreg(S, R, nLags, nRank, lambda)
     if isinf(nRank)
         M = augment(M, 1);
         if ~isnumeric(lambda)
-            [lambda, ~, mu] = regularizer_hyperparams(M, R, lambda);
+            [lambda, ~, mu, ~] = regularizer_hyperparams(M, R, lambda);
             disp(['lambda=' num2str(lambda)]);
             C = reshape(mu, [size(M,1) size(M,2)])';
         else
-            C = fullrank_lsq(M, R, lambda);
+            C = ASD_evidence(M, R);
+%             C = fullrank_lsq(M, R, lambda);
         end
         label = 'full rank';
         fi = 5;
@@ -137,7 +138,7 @@ function Reg = diag_regularizer(lambda, d)
     Reg = diag(lambda);
 end
 %%
-function [theta, sigmasq, mu] = regularizer_hyperparams(M, R, kind)
+function [theta, sigmasq, mu, cov] = regularizer_hyperparams(M, R, kind)
     % finds regularizer hyperparameter using fixed-point algorithm
     % kind: 'ridge', 'ARD'
     % source: Park, Pillow (2011) Methods
@@ -192,13 +193,13 @@ function [theta, sigmasq, mu] = regularizer_hyperparams(M, R, kind)
     sigmasq = s1;
     switch kind
         case 'ridge'
-            [~, mu] = posterior_mean_and_cov(stim_cov, sta, theta, sigmasq, d);
+            [cov, mu] = posterior_mean_and_cov(stim_cov, sta, theta, sigmasq, d);
             figure(15); colormap(gray); imagesc(reshape(mu, 11, 9));
         case 'ARD'
             theyBeGood = abs(theta) > 0;
 %             theyBeGood = ones(numel(theta),1) == 1;
             mu = zeros(numel(theta), 1);
-            [~, m] = posterior_mean_and_cov(stim_cov(theyBeGood, theyBeGood), sta(theyBeGood), theta(theyBeGood), sigmasq);
+            [cov, m] = posterior_mean_and_cov(stim_cov(theyBeGood, theyBeGood), sta(theyBeGood), theta(theyBeGood), sigmasq);
             mu(theyBeGood) = m;
             figure(16); colormap(gray); imagesc(reshape(mu, 11, 9));
     end
@@ -223,7 +224,7 @@ end
 
 function [new_theta, new_sigmasq] = ARD_update(theta, sigmasq, n, d, stim_cov, sta, M2, R)
     jj = abs(theta) > 0;
-%     disp(num2str(sum(jj)));
+    disp(num2str(sum(jj)));
     
     [lambda, mu] = posterior_mean_and_cov(stim_cov(jj, jj), sta(jj), theta(jj), sigmasq);
     lambda_diag = diag(lambda);
@@ -362,4 +363,16 @@ function b_h = fit_b_fminunc(M, w, R, lmb, bi, mu, sig)
     options = optimoptions(@fminunc, 'Algorithm', 'quasi-newton', 'Display', 'off');
     b_h = fminunc(obj_fun, b0, options);
 
+end
+%%
+function C = ASD_evidence(M, R)
+    [lambda, ssq, mu, cov] = regularizer_hyperparams(M, R, 'ridge');
+    M2 = reshape_M(M);
+    [theta, Ds, Dt] = evidence(M2, R, cov, mu, lambda, ssq);
+    cov = ASD(theta(2:end), cov, mu, Ds, Dt);
+    C2 = (M2*M2' + cov)\(M2*R');
+    disp(['theta (sigsq, ds, dt, p): ' num2str(theta)])
+    nBases = size(M, 1);
+    nLags = size(M, 2);
+    C = reshape(C2, [nBases nLags])';
 end
