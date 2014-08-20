@@ -369,16 +369,16 @@ function C = ASD_evidence(M, R)
     [lambda, ssq, mu, cov] = regularizer_hyperparams(M, R, 'ridge');
     M2 = reshape_M(M);
     
-    successFcn = @(Ds, Dt) all(eig(exp(1 - 0.5*(Ds + Dt))) > 0);
-    [Ds, Dt] = randomDistances(size(Sigma, 1), successFcn);
+    successFcn = @(D) all(eig(exp(1 - 0.5*D)) > 0);
+    Ds = randomDistances(size(Sigma, 1), successFcn);
     
     % optimize log evidence
-    objfcn = @(theta) ASD_logEvidence(theta, M2, R, cov, mu, Ds, Dt);
+    objfcn = @(theta) ASD_logEvidence(theta, M2, R, cov, mu, Ds);
     t0 = [sqrt(ssq), -log(lambda) 1.0 1.0];
     options = optimoptions(@fminunc, 'GradObj', 'on');
     theta = fminunc(objfcn, t0, options);
 
-    Reg = ASD_Regularizer(theta(2:end), cov, mu, Ds, Dt);
+    Reg = ASD_Regularizer(theta(2:end), cov, mu, Ds);
     C2 = (M2*M2' + Reg)\(M2*R');
     disp(['theta (sigsq, ds, dt, p): ' num2str(theta)])
     nBases = size(M, 1);

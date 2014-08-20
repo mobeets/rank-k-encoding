@@ -1,5 +1,5 @@
-function [v, dv] = ASD_logEvidence(theta, X, Y, Sigma, mu, Ds, Dt)
-    [C, dC] = ASD_Regularizer(theta(2:end), Sigma, mu, Ds, Dt);
+function [v, dv] = ASD_logEvidence(theta, X, Y, Sigma, mu, Ds)
+    [C, dC] = ASD_Regularizer(theta(2:end), Sigma, mu, Ds);
     v = -logE(C, theta(1), Sigma, X, Y);
     if nargout > 1
         dssq = dlogE_dssq(C, theta(1), X, Y, Sigma, mu);
@@ -13,18 +13,9 @@ function v = logE(C, sig, Sigma, X, Y)
     z1 = 2*pi*Sigma;
     z2 = 2*pi*sig^2*eye(n, n);
     z3 = 2*pi*C;
-
-    if ~all(eig(z3) > 0)
-        1;
-    else
-        2;
-    end
     logZ = 0.5*(logDet(z1) - (logDet(z2) + logDet(z3)));
-
     B = (1/sig^2) - (X'*Sigma*X)/sig^4;
-
     v = logZ - 0.5*Y*B*Y';
-
 end
 
 function v = dlogE_dssq(C, sig, X, Y, Sigma, mu)
