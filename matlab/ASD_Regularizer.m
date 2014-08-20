@@ -1,15 +1,6 @@
-function [C, dC] = ASD(theta, Sigma, mu, Ds, Dt)
+function [C, dC] = ASD_Regularizer(theta, Sigma, mu, Ds, Dt)
     if nargin < 1
-        
-        ds = 1.0;
-        dt = 1.0;
-        p = -1;
-        
-        n = 99;
-        Sigma = eye(n, n);
-        mu = randn(n, 1);
-        successFcn = @(Ds, Dt) all(eig(exp(1 - 0.5*(Ds + Dt))) > 0);
-        [Ds, Dt] = randomDistances(n, successFcn);
+        [Sigma, mu, ds, dt, Ds, Dt] = defaultValues();
     else
         ds = theta(1);
         dt = theta(2);
@@ -30,4 +21,14 @@ function [C, dC] = ASD(theta, Sigma, mu, Ds, Dt)
         dlogE_ddt = -0.5*trace(A*(C .* Dt/dt^3)/C);
         dC = [dlogE_dp dlogE_dds dlogE_ddt];
     end
+end
+function [Sigma, mu, ds, dt, Ds, Dt] = defaultValues()
+    ds = 1.0;
+    dt = 1.0;
+    p = -1;
+    n = 99;
+    Sigma = eye(n, n);
+    mu = randn(n, 1);
+    successFcn = @(Ds, Dt) all(eig(exp(1 - 0.5*(Ds + Dt))) > 0);
+    [Ds, Dt] = randomDistances(n, successFcn);
 end

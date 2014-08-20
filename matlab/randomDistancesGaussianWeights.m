@@ -1,14 +1,14 @@
 function [D, w] = randomDistancesGaussianWeights(b, n, nw, doPlot)
     % returns a square (nw-by-nw) matrix of distances between randomly
-    % selected 2d positions, where the distance between two points is given
-    % by a gaussian centered at (0,0).
+    % selected 2d positions, and a vector of weights, where the weight of a
+    % point is given by the pdf of Normal((0,0), (b,b)) at that point.
     %
-    % b is bounds
+    % b is bounds, and variance of gaussian
     % n is step size within those bounds
     % nw is number of positions to be drawn
-    % doPlot, if true, shows points selected
+    % doPlot, if true, shows points and their respective weights
 
-    if nargin < 3
+    if nargin < 1
         b = 10;
         n = 100;
         nw = 100;
