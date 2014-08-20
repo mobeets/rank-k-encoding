@@ -370,7 +370,7 @@ function C = ASD_evidence(M, R)
     M2 = reshape_M(M);
     
     successFcn = @(D) all(eig(exp(1 - 0.5*D)) > 0);
-    Ds = randomDistances(size(Sigma, 1), successFcn);
+    Ds = randomDistances(size(cov, 1), 2, successFcn);
     
     % optimize log evidence
     objfcn = @(theta) ASD_logEvidence(theta, M2, R, cov, mu, Ds);
